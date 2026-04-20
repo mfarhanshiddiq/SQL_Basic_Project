@@ -1,0 +1,157 @@
+--create table trader.employees (
+--    employee_id INT primary key,
+--    employee_name VARCHAR,
+--    title VARCHAR,
+--    city VARCHAR,
+--    country VARCHAR
+--);
+--create table trader.products (
+--    product_id INT primary key, 
+--    product_name VARCHAR,
+--    quantity_per_unit VARCHAR,
+--    discontinued INT,
+--    category_name VARCHAR
+--);
+--create table trader.orders (
+--    order_id INT primary key,
+--    customer_id VARCHAR,
+--    employee_id INT,
+--    order_date DATE,      
+--    required_date DATE,
+--    shipped_date DATE,
+--    shipper_name VARCHAR,
+--    freight_cost NUMERIC
+--);
+--create table trader.orders_details (
+--    order_id INT,
+--    product_id INT,
+--    unit_price NUMERIC, 
+--    quantity INT,
+--    discount NUMERIC,    
+--    primary key (order_id, product_id) 
+--);
+
+--1. Berapa hari rata-rata durasi dari pesanan dari konsumen sampai pengiriman?
+
+--select 
+--		round(avg(shipped_date - order_date)) as avg_durasi_pesanan
+--from trader.orders
+--where shipped_date is not null;
+
+--2. Pada saat-saat kapan biasanya penjualan kita ramai?
+--select order_date
+--from trader.orders
+--select
+--	extract(month from order_date) as bulan,
+--	count(order_id) as total_pesanan
+--from trader.orders
+--group by bulan
+--order by total_pesanan desc;
+
+--3. Urutkan vendor shipping berdasarkan rasio ongkos kirim dengan penjualan bersih (setelah diskon) selama ini.
+
+--select
+--    o.shipper_name,
+--    SUM(o.freight_cost) as total_ongkir,
+--    ROUND(SUM(od.unit_price * od.quantity * (1 - od.discount)), 2) AS total_penjualan_bersih,
+--    ROUND(
+--        (SUM(o.freight_cost) / NULLIF(SUM(od.unit_price * od.quantity * (1 - od.discount)), 0)) * 100, 2
+--    ) as rasio_persen
+--from trader.orders o
+--join trader.orders_details od ON o.order_id = od.order_id
+--group by o.shipper_name
+--order by rasio_persen DESC;
+
+--4. Tunjukkan 5 produk unggulan dan 5 produk terburuk kita selama ini.
+--(select
+--    'UNGGULAN' as status,
+--    p.product_name, 
+--    ROUND(SUM(od.unit_price * od.quantity * (1 - od.discount)), 2) as total_penjualan
+--from trader.products p
+--join trader.orders_details od on p.product_id = od.product_id
+--group by p.product_name
+--order by total_penjualan DESC
+--limit 5)
+--
+--union all 
+--(select 
+--    'TERBURUK' as status,
+--    p.product_name, 
+--    round(sum(od.unit_price * od.quantity * (1 - od.discount)), 2) as total_penjualan
+--from trader.products p
+--join trader.orders_details od on p.product_id = od.product_id
+--group by p.product_name
+--order by total_penjualan ASC
+--limit 5)
+--
+--order by status DESC, total_penjualan DESC;
+
+--5. Manajer penjualan ingin mengetahui performa penjualan kotor (sebelum diskon) dan penjualan bersih (setelah diskon) selama ini. Dia meminta data total penjualan tersebut beserta total pesanan per bulan.
+--Tolong bantu menyediakan data ini.
+--select
+--    to_char(o.order_date, 'YYYY-MM') as bulan, 
+--    count(DISTINCT o.order_id) as total_pesanan,
+--    round(sum(od.unit_price * od.quantity), 2) as penjualan_kotor,
+--    round(sum(od.unit_price * od.quantity * (1 - od.discount)), 2) as penjualan_bersih,
+--    round(sum(od.unit_price * od.quantity * od.discount ), 2) as total_potongan_diskon
+--from trader.orders o
+--join trader.orders_details od on o.order_id = od.order_id
+--group by bulan
+--order by bulan ASC;
+
+--6. Lebih lanjut lagi, manajer penjualan meminta data pertumbuhan total penjualan kotor dari tahun ke tahun.
+--Sediakan data yang diminta.
+--with PenjualanTahunan as (
+--    select 
+--        extract(year from o.order_date) as tahun,
+--        round(sum(od.unit_price * od.quantity), 2) as total_penjualan_kotor
+--    from trader.orders o
+--    join trader.orders_details od on o.order_id = od.order_id
+--    group by tahun
+--)
+--select 
+--    tahun,
+--    total_penjualan_kotor,
+--    lag(total_penjualan_kotor) over (order by tahun) as penjualan_tahun_lalu,
+--    round(
+--        (total_penjualan_kotor - lag(total_penjualan_kotor) over (order by tahun)) / 
+--        nullif(lag(total_penjualan_kotor) over (order by tahun), 0) * 100, 2) as pertumbuhan_persen
+--from PenjualanTahunan
+--order by tahun;
+
+-- 7. Perusahaan ingin memberikan penghargaan kepada para pegawai penjualan setelah sumbangsih mereka selama ini. Urutkan nama karyawan
+--bidang sales dari yang kontribusi penjualannya terbesar selama ini beserta besaran penjualannya.
+--select
+--	rank() over (
+--	order by SUM(od.unit_price * od.quantity * (1 - od.discount)) desc) as ranking,
+--	e.employee_name,
+--	ROUND(SUM(od.unit_price * od.quantity * (1 - od.discount)), 2) as total_kontribusi
+--from
+--	trader.employees e
+--join trader.orders o on
+--	e.employee_id = o.employee_id
+--join trader.orders_details od on
+--	o.order_id = od.order_id
+--group by
+--	e.employee_name
+--order by
+--	total_kontribusi desc;
+
+--8. Manajer produk ingin mengetahui kontribusi dari setiap kategori produk terhadap penjualan total per tahunnya.
+--Tolong sediakan data yang diminta dan urutkan tahunnya.
+--select
+--	extract(year from o.order_date) as tahun,
+--	p.category_name,
+--	round(sum(od.unit_price * od.quantity * (1 - od.discount)), 2) as total_penjualan_bersih
+--from
+--	trader.products p
+--join trader.orders_details od on
+--	p.product_id = od.product_id
+--join trader.orders o on
+--	od.order_id = o.order_id
+--group by
+--	tahun,
+--	p.category_name
+--order by
+--	tahun asc,
+--	total_penjualan_bersih desc;
